@@ -545,14 +545,14 @@ function validate_wlphrase(s, v, obj){
                                         <tr>
                                             <th><a class="help_tooltip" href="javascript:void(0);" onmouseover="openTooltip(this, 0, 25);"><#WLANConfig11b_KickStaRssiLow_itemname#></a></th>
                                             <td>
-                                                <input type="text" maxlength="4" size="4" name="rt_KickStaRssiLow" class="input" value="<% nvram_get_x("", "rt_KickStaRssiLow"); %>" />
+                                                <input type="text" maxlength="4" size="4" name="wl_KickStaRssiLow" class="input" value="<% nvram_get_x("", "wl_KickStaRssiLow"); %>" />
                                                 &nbsp;<span style="color:#888;">[-100..0]</span>
                                             </td>
                                         </tr>
                                         <tr>
                                             <th><a class="help_tooltip" href="javascript:void(0);" onmouseover="openTooltip(this, 0, 26);"><#WLANConfig11b_AssocReqRssiThres_itemname#></a></th>
                                             <td>
-                                                <input type="text" maxlength="4" size="4" name="rt_AssocReqRssiThres" class="input" value="<% nvram_get_x("", "rt_AssocReqRssiThres"); %>" />
+                                                <input type="text" maxlength="4" size="4" name="wl_AssocReqRssiThres" class="input" value="<% nvram_get_x("", "wl_AssocReqRssiThres"); %>" />
                                                 &nbsp;<span style="color:#888;">[-100..0]</span>
                                             </td>
                                         </tr>
