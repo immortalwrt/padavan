@@ -589,8 +589,8 @@ static VOID ApCliCtrlJoinReqAction(
 		char SSID[MAX_LEN_OF_SSID + 1] = {0};
 
 		snprintf(SSID, JoinReq.SsidLen + 1, "%s", JoinReq.Ssid);
-		printk(KERN_INFO "AP-Client probe: SSID=%s, BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			SSID, PRINT_MAC(JoinReq.Bssid));
+		/* printk(KERN_INFO "AP-Client probe: SSID=%s, BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
+			SSID, PRINT_MAC(JoinReq.Bssid)); */
 	}
 
 	*pCurrState = APCLI_CTRL_PROBE;
@@ -695,8 +695,8 @@ static VOID ApCliCtrlJoinReqTimeoutAction(
 		char SSID[MAX_LEN_OF_SSID + 1] = {0};
 
 		snprintf(SSID, JoinReq.SsidLen + 1, "%s", JoinReq.Ssid);
-		printk(KERN_INFO "AP-Client probe: SSID=%s, BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
-			SSID, PRINT_MAC(JoinReq.Bssid));
+		/* printk(KERN_INFO "AP-Client probe: SSID=%s, BSSID=%02x:%02x:%02x:%02x:%02x:%02x\n",
+			SSID, PRINT_MAC(JoinReq.Bssid)); */
 	}
 
 	MlmeEnqueue(pAd, APCLI_SYNC_STATE_MACHINE, APCLI_MT2_MLME_PROBE_REQ,
