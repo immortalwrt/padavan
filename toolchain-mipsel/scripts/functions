@@ -1756,16 +1756,19 @@ CT_Mirrors()
 
     case "${org}" in
     GNU)
+        echo "https://mirrors.cloud.tencent.com/gnu/${project}"
+        echo "https://mirrors.tuna.tsinghua.edu.cn/gnu/${project}"
+        echo "https://mirrors.cqu.edu.cn/gnu/${project}"
+        echo "https://mirrors.ustc.edu.cn/gnu/${project}"
         echo "https://ftpmirror.gnu.org/gnu/${project}"
-        echo "http://ftpmirror.gnu.org/gnu/${project}"
         echo "https://ftp.gnu.org/gnu/${project}"
-        echo "http://ftp.gnu.org/gnu/${project}"
         echo "ftp://ftp.gnu.org/gnu/${project}"
         ;;
     sourceware)
+        echo "https://sourceware.org/pub/${project}"
+        echo "https://mirrors.kernel.org/sourceware/${project}"
+        echo "https://gcc.gnu.org/pub/${project}"
         echo "ftp://sourceware.org/pub/${project}"
-        echo "http://mirrors.kernel.org/sourceware/${project}"
-        echo "http://gcc.gnu.org/pub/${project}"
         ;;
     Linaro)
         local version="${3}"
@@ -1787,14 +1790,36 @@ CT_Mirrors()
                 # Ignore, this happens before .config is fully evaluated
                 ;;
             [34].*)
-                echo "http://www.kernel.org/pub/linux/kernel/v${version%%.*}.x"
+                echo "https://mirrors.cloud.tencent.com/linux-kernel/v${version%%.*}.x"
+                echo "https://mirrors.aliyun.com/linux-kernel/v${version%%.*}.x"
+                echo "https://mirrors.tuna.tsinghua.edu.cn/kernel/v${version%%.*}.x"
+                echo "https://mirrors.cqu.edu.cn/kernel/linux/kernel/v${version%%.*}.x"
+                echo "https://mirrors.ustc.edu.cn/kernel.org/v${version%%.*}.x"
+                echo "https://cdn.kernel.org/pub/linux/kernel/v${version%%.*}.x"
+                echo "https://www.kernel.org/pub/linux/kernel/v${version%%.*}.x"
                 ;;
             2.6.*)
-                echo "http://www.kernel.org/pub/linux/kernel/v2.6"
+                echo "https://mirrors.cloud.tencent.com/linux-kernel/v2.6"
+                echo "https://mirrors.aliyun.com/linux-kernel/v2.6"
+                echo "https://mirrors.tuna.tsinghua.edu.cn/kernel/v2.6"
+                echo "https://mirrors.cqu.edu.cn/kernel/linux/kernel/v2.6"
+                echo "https://mirrors.ustc.edu.cn/kernel.org/v2.6"
+                echo "https://cdn.kernel.org/pub/linux/kernel/v2.6"
+                echo "https://www.kernel.org/pub/linux/kernel/v2.6"
                 case "${version}" in
                 2.6.*.*)
-                    echo "http://www.kernel.org/pub/linux/kernel/v2.6/longterm"
-                    echo "http://www.kernel.org/pub/linux/kernel/v2.6/longterm/v${version%.*}"
+                    echo "https://mirrors.cloud.tencent.com/linux-kernel/v2.6/longterm"
+                    echo "https://mirrors.cloud.tencent.com/linux-kernel/v2.6/longterm/v${version%.*}"
+                    echo "https://mirrors.aliyun.com/linux-kernel/v2.6/longterm"
+                    echo "https://mirrors.aliyun.com/linux-kernel/v2.6/longterm/v${version%.*}"
+                    echo "https://mirrors.tuna.tsinghua.edu.cn/kernel/v2.6/longterm"
+                    echo "https://mirrors.tuna.tsinghua.edu.cn/kernel/v2.6/longterm/v${version%.*}"
+                    echo "https://mirrors.ustc.edu.cn/kernel.org/v2.6/longterm"
+                    echo "https://mirrors.ustc.edu.cn/kernel.org/v2.6/longterm/v${version%.*}"
+                    echo "https://cdn.kernel.org/pub/linux/kernel/v2.6/longterm"
+                    echo "https://cdn.kernel.org/pub/linux/kernel/v2.6/longterm/v${version%.*}"
+                    echo "https://www.kernel.org/pub/linux/kernel/v2.6/longterm"
+                    echo "https://www.kernel.org/pub/linux/kernel/v2.6/longterm/v${version%.*}"
                     ;;
                 esac
                 ;;
@@ -1804,6 +1829,7 @@ CT_Mirrors()
             esac
             ;;
         dtc)
+            echo "https://cdn.kernel.org/pub/software/utils/dtc"
             echo "https://mirrors.edge.kernel.org/pub/software/utils/dtc"
             ;;
         *)
