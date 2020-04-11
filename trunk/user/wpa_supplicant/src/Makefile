@@ -1,8 +1,7 @@
-SUBDIRS=ap common crypto drivers eapol_auth eapol_supp eap_common eap_peer eap_server l2_packet p2p pae radius rsn_supp tls utils wps
-SUBDIRS += fst
+SUBDIRS=common crypto drivers hlr_auc_gw eapol_supp eap_common eap_peer eap_server l2_packet radius rsn_supp tls utils wps
 
 all:
-	for d in $(SUBDIRS); do [ -d $$d ] && $(MAKE) -C $$d; done
+	@echo Nothing to be made.
 
 clean:
 	for d in $(SUBDIRS); do [ -d $$d ] && $(MAKE) -C $$d clean; done

@@ -2,20 +2,24 @@
  * wpa_gui - ScanResults class
  * Copyright (c) 2005-2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include <cstdio>
 
 #include "scanresults.h"
-#include "signalbar.h"
 #include "wpagui.h"
 #include "networkconfig.h"
-#include "scanresultsitem.h"
 
 
-ScanResults::ScanResults(QWidget *parent, const char *, bool, Qt::WindowFlags)
+ScanResults::ScanResults(QWidget *parent, const char *, bool, Qt::WFlags)
 	: QDialog(parent)
 {
 	setupUi(this);
@@ -27,9 +31,8 @@ ScanResults::ScanResults(QWidget *parent, const char *, bool, Qt::WindowFlags)
 		SLOT(bssSelected(QTreeWidgetItem *)));
 
 	wpagui = NULL;
-	scanResultsWidget->setItemsExpandable(false);
-	scanResultsWidget->setRootIsDecorated(false);
-	scanResultsWidget->setItemDelegate(new SignalBar(scanResultsWidget));
+	scanResultsWidget->setItemsExpandable(FALSE);
+	scanResultsWidget->setRootIsDecorated(FALSE);
 }
 
 
@@ -88,7 +91,7 @@ void ScanResults::updateResults()
 				bssid = (*it).mid(pos);
 			else if ((*it).startsWith("freq="))
 				freq = (*it).mid(pos);
-			else if ((*it).startsWith("level="))
+			else if ((*it).startsWith("qual="))
 				signal = (*it).mid(pos);
 			else if ((*it).startsWith("flags="))
 				flags = (*it).mid(pos);
@@ -96,7 +99,7 @@ void ScanResults::updateResults()
 				ssid = (*it).mid(pos);
 		}
 
-		ScanResultsItem *item = new ScanResultsItem(scanResultsWidget);
+		QTreeWidgetItem *item = new QTreeWidgetItem(scanResultsWidget);
 		if (item) {
 			item->setText(0, ssid);
 			item->setText(1, bssid);

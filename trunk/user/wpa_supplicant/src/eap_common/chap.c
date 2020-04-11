@@ -1,18 +1,25 @@
 /*
  * CHAP-MD5 (RFC 1994)
- * Copyright (c) 2007-2009, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
-#include "crypto/crypto.h"
+#include "md5.h"
+#include "crypto.h"
 #include "chap.h"
 
-int chap_md5(u8 id, const u8 *secret, size_t secret_len, const u8 *challenge,
+void chap_md5(u8 id, const u8 *secret, size_t secret_len, const u8 *challenge,
 	      size_t challenge_len, u8 *response)
 {
 	const u8 *addr[3];
@@ -24,5 +31,5 @@ int chap_md5(u8 id, const u8 *secret, size_t secret_len, const u8 *challenge,
 	len[1] = secret_len;
 	addr[2] = challenge;
 	len[2] = challenge_len;
-	return md5_vector(3, addr, len, response);
+	md5_vector(3, addr, len, response);
 }

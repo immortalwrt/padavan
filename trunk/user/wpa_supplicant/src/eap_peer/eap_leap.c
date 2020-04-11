@@ -2,17 +2,22 @@
  * EAP peer method: LEAP
  * Copyright (c) 2004-2007, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
-#include "crypto/ms_funcs.h"
-#include "crypto/crypto.h"
-#include "crypto/random.h"
 #include "eap_i.h"
+#include "ms_funcs.h"
+#include "crypto.h"
 
 #define LEAP_VERSION 1
 #define LEAP_CHALLENGE_LEN 8
@@ -115,14 +120,10 @@ static struct wpabuf * eap_leap_process_request(struct eap_sm *sm, void *priv,
 	wpabuf_put_u8(resp, 0); /* unused */
 	wpabuf_put_u8(resp, LEAP_RESPONSE_LEN);
 	rpos = wpabuf_put(resp, LEAP_RESPONSE_LEN);
-	if ((pwhash && challenge_response(challenge, password, rpos)) ||
-	    (!pwhash &&
-	     nt_challenge_response(challenge, password, password_len, rpos))) {
-		wpa_printf(MSG_DEBUG, "EAP-LEAP: Failed to derive response");
-		ret->ignore = TRUE;
-		wpabuf_free(resp);
-		return NULL;
-	}
+	if (pwhash)
+		challenge_response(challenge, password, rpos);
+	else
+		nt_challenge_response(challenge, password, password_len, rpos);
 	os_memcpy(data->peer_response, rpos, LEAP_RESPONSE_LEN);
 	wpa_hexdump(MSG_MSGDUMP, "EAP-LEAP: Response",
 		    rpos, LEAP_RESPONSE_LEN);
@@ -166,7 +167,7 @@ static struct wpabuf * eap_leap_process_success(struct eap_sm *sm, void *priv,
 	wpabuf_put_u8(resp, 0); /* unused */
 	wpabuf_put_u8(resp, LEAP_CHALLENGE_LEN);
 	pos = wpabuf_put(resp, LEAP_CHALLENGE_LEN);
-	if (random_get_bytes(pos, LEAP_CHALLENGE_LEN)) {
+	if (os_get_random(pos, LEAP_CHALLENGE_LEN)) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: Failed to read random data "
 			   "for challenge");
 		wpabuf_free(resp);
@@ -232,26 +233,17 @@ static struct wpabuf * eap_leap_process_response(struct eap_sm *sm, void *priv,
 	os_memcpy(data->ap_response, pos, LEAP_RESPONSE_LEN);
 
 	if (pwhash) {
-		if (hash_nt_password_hash(password, pw_hash_hash)) {
-			ret->ignore = TRUE;
-			return NULL;
-		}
+		hash_nt_password_hash(password, pw_hash_hash);
 	} else {
-		if (nt_password_hash(password, password_len, pw_hash) ||
-		    hash_nt_password_hash(pw_hash, pw_hash_hash)) {
-			ret->ignore = TRUE;
-			return NULL;
-		}
+		nt_password_hash(password, password_len, pw_hash);
+		hash_nt_password_hash(pw_hash, pw_hash_hash);
 	}
-	if (challenge_response(data->ap_challenge, pw_hash_hash, expected)) {
-		ret->ignore = TRUE;
-		return NULL;
-	}
+	challenge_response(data->ap_challenge, pw_hash_hash, expected);
 
 	ret->methodState = METHOD_DONE;
 	ret->allowNotifications = FALSE;
 
-	if (os_memcmp_const(pos, expected, LEAP_RESPONSE_LEN) != 0) {
+	if (os_memcmp(pos, expected, LEAP_RESPONSE_LEN) != 0) {
 		wpa_printf(MSG_WARNING, "EAP-LEAP: AP sent an invalid "
 			   "response - authentication failed");
 		wpa_hexdump(MSG_DEBUG, "EAP-LEAP: Expected response from AP",
@@ -353,17 +345,11 @@ static u8 * eap_leap_getKey(struct eap_sm *sm, void *priv, size_t *len)
 	if (key == NULL)
 		return NULL;
 
-	if (pwhash) {
-		if (hash_nt_password_hash(password, pw_hash_hash)) {
-			os_free(key);
-			return NULL;
-		}
-	} else {
-		if (nt_password_hash(password, password_len, pw_hash) ||
-		    hash_nt_password_hash(pw_hash, pw_hash_hash)) {
-			os_free(key);
-			return NULL;
-		}
+	if (pwhash)
+		hash_nt_password_hash(password, pw_hash_hash);
+	else {
+		nt_password_hash(password, password_len, pw_hash);
+		hash_nt_password_hash(pw_hash, pw_hash_hash);
 	}
 	wpa_hexdump_key(MSG_DEBUG, "EAP-LEAP: pw_hash_hash",
 			pw_hash_hash, 16);
@@ -390,9 +376,6 @@ static u8 * eap_leap_getKey(struct eap_sm *sm, void *priv, size_t *len)
 	wpa_hexdump_key(MSG_DEBUG, "EAP-LEAP: master key", key, LEAP_KEY_LEN);
 	*len = LEAP_KEY_LEN;
 
-	os_memset(pw_hash, 0, sizeof(pw_hash));
-	os_memset(pw_hash_hash, 0, sizeof(pw_hash_hash));
-
 	return key;
 }
 
@@ -400,6 +383,7 @@ static u8 * eap_leap_getKey(struct eap_sm *sm, void *priv, size_t *len)
 int eap_peer_leap_register(void)
 {
 	struct eap_method *eap;
+	int ret;
 
 	eap = eap_peer_method_alloc(EAP_PEER_METHOD_INTERFACE_VERSION,
 				    EAP_VENDOR_IETF, EAP_TYPE_LEAP, "LEAP");
@@ -412,5 +396,8 @@ int eap_peer_leap_register(void)
 	eap->isKeyAvailable = eap_leap_isKeyAvailable;
 	eap->getKey = eap_leap_getKey;
 
-	return eap_peer_method_register(eap);
+	ret = eap_peer_method_register(eap);
+	if (ret)
+		eap_peer_method_free(eap);
+	return ret;
 }

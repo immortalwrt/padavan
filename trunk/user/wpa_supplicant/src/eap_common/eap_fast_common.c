@@ -2,15 +2,21 @@
  * EAP-FAST common helper functions (RFC 4851)
  * Copyright (c) 2008, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
-#include "crypto/sha1.h"
-#include "crypto/tls.h"
+#include "sha1.h"
+#include "tls.h"
 #include "eap_defs.h"
 #include "eap_tlv_common.h"
 #include "eap_fast_common.h"
@@ -79,7 +85,7 @@ void eap_fast_derive_master_secret(const u8 *pac_key, const u8 *server_random,
 
 	/*
 	 * RFC 4851, Section 5.1:
-	 * master_secret = T-PRF(PAC-Key, "PAC to master secret label hash",
+	 * master_secret = T-PRF(PAC-Key, "PAC to master secret label hash", 
 	 *                       server_random + client_random, 48)
 	 */
 	os_memcpy(seed, server_random, TLS_RANDOM_LEN);
@@ -93,41 +99,71 @@ void eap_fast_derive_master_secret(const u8 *pac_key, const u8 *server_random,
 }
 
 
-u8 * eap_fast_derive_key(void *ssl_ctx, struct tls_connection *conn, size_t len)
+u8 * eap_fast_derive_key(void *ssl_ctx, struct tls_connection *conn,
+			 const char *label, size_t len)
 {
-	u8 *out;
+	struct tls_keys keys;
+	u8 *rnd = NULL, *out;
+	int block_size;
 
-	out = os_malloc(len);
+	block_size = tls_connection_get_keyblock_size(ssl_ctx, conn);
+	if (block_size < 0)
+		return NULL;
+
+	out = os_malloc(block_size + len);
 	if (out == NULL)
 		return NULL;
 
-	if (tls_connection_get_eap_fast_key(ssl_ctx, conn, out, len)) {
-		os_free(out);
-		return NULL;
+	if (tls_connection_prf(ssl_ctx, conn, label, 1, out, block_size + len)
+	    == 0) {
+		os_memmove(out, out + block_size, len);
+		return out;
 	}
 
+	if (tls_connection_get_keys(ssl_ctx, conn, &keys))
+		goto fail;
+
+	rnd = os_malloc(keys.client_random_len + keys.server_random_len);
+	if (rnd == NULL)
+		goto fail;
+
+	os_memcpy(rnd, keys.server_random, keys.server_random_len);
+	os_memcpy(rnd + keys.server_random_len, keys.client_random,
+		  keys.client_random_len);
+
+	wpa_hexdump_key(MSG_MSGDUMP, "EAP-FAST: master_secret for key "
+			"expansion", keys.master_key, keys.master_key_len);
+	if (tls_prf(keys.master_key, keys.master_key_len,
+		    label, rnd, keys.client_random_len +
+		    keys.server_random_len, out, block_size + len))
+		goto fail;
+	os_free(rnd);
+	os_memmove(out, out + block_size, len);
 	return out;
+
+fail:
+	os_free(rnd);
+	os_free(out);
+	return NULL;
 }
 
 
-int eap_fast_derive_eap_msk(const u8 *simck, u8 *msk)
+void eap_fast_derive_eap_msk(const u8 *simck, u8 *msk)
 {
 	/*
 	 * RFC 4851, Section 5.4: EAP Master Session Key Generation
 	 * MSK = T-PRF(S-IMCK[j], "Session Key Generating Function", 64)
 	 */
 
-	if (sha1_t_prf(simck, EAP_FAST_SIMCK_LEN,
-		       "Session Key Generating Function", (u8 *) "", 0,
-		       msk, EAP_FAST_KEY_LEN) < 0)
-		return -1;
+	sha1_t_prf(simck, EAP_FAST_SIMCK_LEN,
+		   "Session Key Generating Function", (u8 *) "", 0,
+		   msk, EAP_FAST_KEY_LEN);
 	wpa_hexdump_key(MSG_DEBUG, "EAP-FAST: Derived key (MSK)",
 			msk, EAP_FAST_KEY_LEN);
-	return 0;
 }
 
 
-int eap_fast_derive_eap_emsk(const u8 *simck, u8 *emsk)
+void eap_fast_derive_eap_emsk(const u8 *simck, u8 *emsk)
 {
 	/*
 	 * RFC 4851, Section 5.4: EAP Master Session Key Genreration
@@ -135,18 +171,16 @@ int eap_fast_derive_eap_emsk(const u8 *simck, u8 *emsk)
 	 *        "Extended Session Key Generating Function", 64)
 	 */
 
-	if (sha1_t_prf(simck, EAP_FAST_SIMCK_LEN,
-		       "Extended Session Key Generating Function", (u8 *) "", 0,
-		       emsk, EAP_EMSK_LEN) < 0)
-		return -1;
+	sha1_t_prf(simck, EAP_FAST_SIMCK_LEN,
+		   "Extended Session Key Generating Function", (u8 *) "", 0,
+		   emsk, EAP_EMSK_LEN);
 	wpa_hexdump_key(MSG_DEBUG, "EAP-FAST: Derived key (EMSK)",
 			emsk, EAP_EMSK_LEN);
-	return 0;
 }
 
 
 int eap_fast_parse_tlv(struct eap_fast_tlv_parse *tlv,
-		       int tlv_type, u8 *pos, size_t len)
+		       int tlv_type, u8 *pos, int len)
 {
 	switch (tlv_type) {
 	case EAP_TLV_EAP_PAYLOAD_TLV:

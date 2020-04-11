@@ -2,8 +2,14 @@
  * wpa_gui - EventHistory class
  * Copyright (c) 2005-2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include <QHeaderView>
@@ -53,9 +59,9 @@ QVariant EventListModel::headerData(int section, Qt::Orientation orientation,
 	if (orientation == Qt::Horizontal) {
 		switch (section) {
 		case 0:
-			return QString(tr("Timestamp"));
+			return QString("Timestamp");
 		case 1:
-			return QString(tr("Message"));
+			return QString("Message");
 		default:
 			return QVariant();
 		}
@@ -73,15 +79,15 @@ void EventListModel::addEvent(QString time, QString msg)
 }
 
 
-EventHistory::EventHistory(QWidget *parent, const char *, bool, Qt::WindowFlags)
+EventHistory::EventHistory(QWidget *parent, const char *, bool, Qt::WFlags)
 	: QDialog(parent)
 {
 	setupUi(this);
 
 	connect(closeButton, SIGNAL(clicked()), this, SLOT(close()));
 
-	eventListView->setItemsExpandable(false);
-	eventListView->setRootIsDecorated(false);
+	eventListView->setItemsExpandable(FALSE);
+	eventListView->setRootIsDecorated(FALSE);
 	elm = new EventListModel(parent);
 	eventListView->setModel(elm);
 }

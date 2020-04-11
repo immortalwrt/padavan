@@ -1,10 +1,16 @@
-/*
+/**
  * httpread - Manage reading file(s) from HTTP/TCP socket
  * Author: Ted Merrill
  * Copyright 2008 Atheros Communications
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  *
  * The files are buffered via internal callbacks from eloop, then presented to
  * an application callback routine when completely read into memory. May also
@@ -44,6 +50,16 @@
 #define HTTPREAD_HEADER_MAX_SIZE 4096   /* max allowed for headers */
 #define HTTPREAD_BODYBUF_DELTA 4096     /* increase allocation by this */
 
+#if 0
+/* httpread_debug -- set this global variable > 0 e.g. from debugger
+ * to enable debugs (larger numbers for more debugs)
+ * Make this a #define of 0 to eliminate the debugging code.
+ */
+int httpread_debug = 99;
+#else
+#define httpread_debug 0        /* eliminates even the debugging code */
+#endif
+
 
 /* control instance -- actual definition (opaque to application)
  */
@@ -57,6 +73,8 @@ struct httpread {
 	int timeout_seconds;            /* 0 or total duration timeout period */
 
 	/* dynamically used information follows */
+	int sd_registered;      /* nonzero if we need to unregister socket */
+	int to_registered;      /* nonzero if we need to unregister timeout */
 
 	int got_hdr;            /* nonzero when header is finalized */
 	char hdr[HTTPREAD_HEADER_MAX_SIZE+1];   /* headers stored here */
@@ -117,6 +135,19 @@ static int word_eq(char *s1, char *s2)
 }
 
 
+/* convert hex to binary
+ * Requires that c have been previously tested true with isxdigit().
+ */
+static int hex_value(int c)
+{
+	if (isdigit(c))
+		return c - '0';
+	if (islower(c))
+		return 10 + c - 'a';
+	return 10 + c - 'A';
+}
+
+
 static void httpread_timeout_handler(void *eloop_data, void *user_ctx);
 
 /* httpread_destroy -- if h is non-NULL, clean up
@@ -126,12 +157,17 @@ static void httpread_timeout_handler(void *eloop_data, void *user_ctx);
  */
 void httpread_destroy(struct httpread *h)
 {
-	wpa_printf(MSG_DEBUG, "httpread_destroy(%p)", h);
+	if (httpread_debug >= 10)
+		wpa_printf(MSG_DEBUG, "ENTER httpread_destroy(%p)", h);
 	if (!h)
 		return;
 
-	eloop_cancel_timeout(httpread_timeout_handler, NULL, h);
-	eloop_unregister_sock(h->sd, EVENT_TYPE_READ);
+	if (h->to_registered)
+		eloop_cancel_timeout(httpread_timeout_handler, NULL, h);
+	h->to_registered = 0;
+	if (h->sd_registered)
+		eloop_unregister_sock(h->sd, EVENT_TYPE_READ);
+	h->sd_registered = 0;
 	os_free(h->body);
 	os_free(h->uri);
 	os_memset(h, 0, sizeof(*h));  /* aid debugging */
@@ -146,6 +182,7 @@ static void httpread_timeout_handler(void *eloop_data, void *user_ctx)
 {
 	struct httpread *h = user_ctx;
 	wpa_printf(MSG_DEBUG, "httpread timeout (%p)", h);
+	h->to_registered = 0;   /* is self-cancelling */
 	(*h->cb)(h, h->cookie, HTTPREAD_EVENT_TIMEOUT);
 }
 
@@ -166,12 +203,6 @@ static int httpread_hdr_option_analyze(
 		if (!isdigit(*hbp))
 			return -1;
 		h->content_length = atol(hbp);
-		if (h->content_length < 0 || h->content_length > h->max_bytes) {
-			wpa_printf(MSG_DEBUG,
-				   "httpread: Unacceptable Content-Length %d",
-				   h->content_length);
-			return -1;
-		}
 		h->got_content_length = 1;
 		return 0;
 	}
@@ -270,7 +301,8 @@ static int httpread_hdr_analyze(struct httpread *h)
 			int c = *rawuri;
 			if (c == '%' &&
 			    isxdigit(rawuri[1]) && isxdigit(rawuri[2])) {
-				*uri++ = hex2byte(rawuri + 1);
+				*uri++ = (hex_value(rawuri[1]) << 4) |
+					hex_value(rawuri[2]);
 				rawuri += 3;
 			} else {
 				*uri++ = c;
@@ -278,6 +310,8 @@ static int httpread_hdr_analyze(struct httpread *h)
 			}
 		}
 		*uri = 0;       /* null terminate */
+		while (isgraph(*hbp))
+			hbp++;
 		while (*hbp == ' ' || *hbp == '\t')
 			hbp++;
 		/* get version */
@@ -373,16 +407,15 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 	char *bbp;      /* pointer into body buffer */
 	char readbuf[HTTPREAD_READBUF_SIZE];  /* temp use to read into */
 
+	if (httpread_debug >= 20)
+		wpa_printf(MSG_DEBUG, "ENTER httpread_read_handler(%p)", h);
+
 	/* read some at a time, then search for the interal
 	 * boundaries between header and data and etc.
 	 */
-	wpa_printf(MSG_DEBUG, "httpread: Trying to read more data(%p)", h);
 	nread = read(h->sd, readbuf, sizeof(readbuf));
-	if (nread < 0) {
-		wpa_printf(MSG_DEBUG, "httpread failed: %s", strerror(errno));
+	if (nread < 0)
 		goto bad;
-	}
-	wpa_hexdump_ascii(MSG_MSGDUMP, "httpread - read", readbuf, nread);
 	if (nread == 0) {
 		/* end of transmission... this may be normal
 		 * or may be an error... in some cases we can't
@@ -405,9 +438,10 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 		 * although dropped connections can cause false
 		 * end
 		 */
-		wpa_printf(MSG_DEBUG, "httpread ok eof(%p)", h);
-		h->got_body = 1;
-		goto got_file;
+		if (httpread_debug >= 10)
+			wpa_printf(MSG_DEBUG, "httpread ok eof(%p)", h);
+			h->got_body = 1;
+			goto got_file;
 	}
 	rbp = readbuf;
 
@@ -425,8 +459,6 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 			if (nread == 0)
 				goto get_more;
 			if (h->hdr_nbytes == HTTPREAD_HEADER_MAX_SIZE) {
-				wpa_printf(MSG_DEBUG,
-					   "httpread: Too long header");
 				goto bad;
 			}
 			*hbp++ = *rbp++;
@@ -448,13 +480,16 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 			goto bad;
 		}
 		if (h->max_bytes == 0) {
-			wpa_printf(MSG_DEBUG, "httpread no body hdr end(%p)",
-				   h);
+			if (httpread_debug >= 10)
+				wpa_printf(MSG_DEBUG,
+					   "httpread no body hdr end(%p)", h);
 			goto got_file;
 		}
 		if (h->got_content_length && h->content_length == 0) {
-			wpa_printf(MSG_DEBUG,
-				   "httpread zero content length(%p)", h);
+			if (httpread_debug >= 10)
+				wpa_printf(MSG_DEBUG,
+					   "httpread zero content length(%p)",
+					   h);
 			goto got_file;
 		}
 	}
@@ -467,7 +502,9 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 	    !os_strncasecmp(h->hdr, "HEAD", 4) ||
 	    !os_strncasecmp(h->hdr, "GET", 3)) {
 		if (!h->got_body) {
-			wpa_printf(MSG_DEBUG, "httpread NO BODY for sp. type");
+			if (httpread_debug >= 10)
+				wpa_printf(MSG_DEBUG,
+					   "httpread NO BODY for sp. type");
 		}
 		h->got_body = 1;
 		goto got_file;
@@ -488,12 +525,8 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 			char *new_body;
 			int new_alloc_nbytes;
 
-			if (h->body_nbytes >= h->max_bytes) {
-				wpa_printf(MSG_DEBUG,
-					   "httpread: body_nbytes=%d >= max_bytes=%d",
-					   h->body_nbytes, h->max_bytes);
+			if (h->body_nbytes >= h->max_bytes)
 				goto bad;
-			}
 			new_alloc_nbytes = h->body_alloc_nbytes +
 				HTTPREAD_BODYBUF_DELTA;
 			/* For content-length case, the first time
@@ -503,23 +536,9 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 			if (h->got_content_length &&
 			    new_alloc_nbytes < (h->content_length + 1))
 				new_alloc_nbytes = h->content_length + 1;
-			if (new_alloc_nbytes < h->body_alloc_nbytes ||
-			    new_alloc_nbytes > h->max_bytes +
-			    HTTPREAD_BODYBUF_DELTA) {
-				wpa_printf(MSG_DEBUG,
-					   "httpread: Unacceptable body length %d (body_alloc_nbytes=%u max_bytes=%u)",
-					   new_alloc_nbytes,
-					   h->body_alloc_nbytes,
-					   h->max_bytes);
-				goto bad;
-			}
 			if ((new_body = os_realloc(h->body, new_alloc_nbytes))
-			    == NULL) {
-				wpa_printf(MSG_DEBUG,
-					   "httpread: Failed to reallocate buffer (len=%d)",
-					   new_alloc_nbytes);
+			    == NULL)
 				goto bad;
-			}
 
 			h->body = new_body;
 			h->body_alloc_nbytes = new_alloc_nbytes;
@@ -538,19 +557,9 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 					/* hdr line consists solely
 					 * of a hex numeral and CFLF
 					 */
-					if (!isxdigit(*cbp)) {
-						wpa_printf(MSG_DEBUG,
-							   "httpread: Unexpected chunk header value (not a hex digit)");
+					if (!isxdigit(*cbp))
 						goto bad;
-					}
 					h->chunk_size = strtoul(cbp, NULL, 16);
-					if (h->chunk_size < 0 ||
-					    h->chunk_size > h->max_bytes) {
-						wpa_printf(MSG_DEBUG,
-							   "httpread: Invalid chunk size %d",
-							   h->chunk_size);
-						goto bad;
-					}
 					/* throw away chunk header
 					 * so we have only real data
 					 */
@@ -560,9 +569,10 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 						/* end of chunking */
 						/* trailer follows */
 						h->in_trailer = 1;
-						wpa_printf(MSG_DEBUG,
-							   "httpread end chunks(%p)",
-							   h);
+						if (httpread_debug >= 20)
+							wpa_printf(
+								MSG_DEBUG,
+								"httpread end chunks(%p)", h);
 						break;
 					}
 					h->in_chunk_data = 1;
@@ -580,11 +590,8 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 					 */
 					if (bbp[-1] == '\n' &&
 					    bbp[-2] == '\r') {
-					} else {
-						wpa_printf(MSG_DEBUG,
-							   "httpread: Invalid chunk end");
+					} else
 						goto bad;
-					}
 					h->body_nbytes -= 2;
 					bbp -= 2;
 					h->chunk_start = h->body_nbytes;
@@ -594,8 +601,10 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 			} else if (h->got_content_length &&
 				   h->body_nbytes >= h->content_length) {
 				h->got_body = 1;
-				wpa_printf(MSG_DEBUG,
-					   "httpread got content(%p)", h);
+				if (httpread_debug >= 10)
+					wpa_printf(
+						MSG_DEBUG,
+						"httpread got content(%p)", h);
 				goto got_file;
 			}
 			if (nread <= 0)
@@ -619,11 +628,6 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 				ncopy = nread;
 			}
 			/* Note: should never be 0 */
-			if (ncopy < 0) {
-				wpa_printf(MSG_DEBUG,
-					   "httpread: Invalid ncopy=%d", ncopy);
-				goto bad;
-			}
 			if (ncopy > nread)
 				ncopy = nread;
 			os_memcpy(bbp, rbp, ncopy);
@@ -640,6 +644,7 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 		 * We do NOT support trailers except to skip them --
 		 * this is supported (generally) by the http spec.
 		 */
+		bbp = h->body + h->body_nbytes;
 		for (;;) {
 			int c;
 			if (nread <= 0)
@@ -658,9 +663,10 @@ static void httpread_read_handler(int sd, void *eloop_ctx, void *sock_ctx)
 				if (c == '\n') {
 					h->trailer_state = trailer_line_begin;
 					h->in_trailer = 0;
-					wpa_printf(MSG_DEBUG,
-						   "httpread got content(%p)",
-						   h);
+					if (httpread_debug >= 10)
+						wpa_printf(
+							MSG_DEBUG,
+							"httpread got content(%p)", h);
 					h->got_body = 1;
 					goto got_file;
 				}
@@ -688,14 +694,13 @@ bad:
 	return;
 
 get_more:
-	wpa_printf(MSG_DEBUG, "httpread: get more (%p)", h);
 	return;
 
 got_file:
-	wpa_printf(MSG_DEBUG, "httpread got file %d bytes type %d",
-		   h->body_nbytes, h->hdr_type);
-	wpa_hexdump_ascii(MSG_MSGDUMP, "httpread: body",
-			  h->body, h->body_nbytes);
+	if (httpread_debug >= 10)
+		wpa_printf(MSG_DEBUG,
+			   "httpread got file %d bytes type %d",
+			   h->body_nbytes, h->hdr_type);
 	/* Null terminate for convenience of some applications */
 	if (h->body)
 		h->body[h->body_nbytes] = 0; /* null terminate */
@@ -704,11 +709,15 @@ got_file:
 	 * and just in case somehow we don't get destroyed right away,
 	 * unregister now.
 	 */
-	eloop_unregister_sock(h->sd, EVENT_TYPE_READ);
+	if (h->sd_registered)
+		eloop_unregister_sock(h->sd, EVENT_TYPE_READ);
+	h->sd_registered = 0;
 	/* The application can destroy us whenever they feel like...
 	 * cancel timeout.
 	 */
-	eloop_cancel_timeout(httpread_timeout_handler, NULL, h);
+	if (h->to_registered)
+		eloop_cancel_timeout(httpread_timeout_handler, NULL, h);
+	h->to_registered = 0;
 	(*h->cb)(h, h->cookie, HTTPREAD_EVENT_FILE_READY);
 }
 
@@ -746,17 +755,21 @@ struct httpread * httpread_create(
 	h->max_bytes = max_bytes;
 	h->timeout_seconds = timeout_seconds;
 
-	if (timeout_seconds > 0 &&
-	    eloop_register_timeout(timeout_seconds, 0,
-				   httpread_timeout_handler, NULL, h)) {
-		/* No way to recover (from malloc failure) */
-		goto fail;
+	if (timeout_seconds > 0) {
+		if (eloop_register_timeout(timeout_seconds, 0,
+					   httpread_timeout_handler,
+					   NULL, h)) {
+			/* No way to recover (from malloc failure) */
+			goto fail;
+		}
+		h->to_registered = 1;
 	}
 	if (eloop_register_sock(sd, EVENT_TYPE_READ, httpread_read_handler,
 				NULL, h)) {
 		/* No way to recover (from malloc failure) */
 		goto fail;
 	}
+	h->sd_registered = 1;
 	return h;
 
 fail:

@@ -2305,12 +2305,6 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int has_http_ssl = 0;
 #endif
-#if defined (SUPPORT_OPENSSL_EC)
-	int has_openssl_ec = 1;
-#else
-	int has_openssl_ec = 0;
-#endif
-
 #if defined (SUPPORT_DDNS_SSL)
 	int has_ddns_ssl = 1;
 #else
@@ -2440,7 +2434,6 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		"function support_ipv4_ppe() { return %d;}\n"
 		"function support_peap_ssl() { return %d;}\n"
 		"function support_http_ssl() { return %d;}\n"
-		"function support_openssl_ec() { return %d;}\n"
 		"function support_ddns_ssl() { return %d;}\n"
 		"function support_min_vlan() { return %d;}\n"
 		"function support_max_conn() { return %d;}\n"
@@ -2478,7 +2471,6 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		has_peap_ssl,
 		has_http_ssl,
 		has_ddns_ssl,
-		has_openssl_ec,
 		MIN_EXT_VLAN_VID,
 		max_conn,
 		has_mtd_rwfs,
@@ -3225,12 +3217,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(APP_OPENVPN)
 		char *common_name = websGetVar(wp, "common_name", "");
-		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
+		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = "client@ovpn";
 		if (get_login_safe())
-			sys_result = doSystem("/sbin/ovpn_export_client '%s' %s %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/sbin/ovpn_export_client '%s' %d %d", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3240,12 +3232,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(APP_OPENVPN)
 		char *common_name = websGetVar(wp, "common_name", "");
-		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
+		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = "OpenVPN Server";
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %s -d %d", "server", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %d -d %d", "server", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3255,12 +3247,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(SUPPORT_HTTPS)
 		char *common_name = websGetVar(wp, "common_name", "");
-		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
+		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = nvram_safe_get("lan_ipaddr_t");
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %s -d %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %d -d %d", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;

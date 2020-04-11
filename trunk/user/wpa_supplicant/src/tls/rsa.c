@@ -1,14 +1,21 @@
 /*
  * RSA
- * Copyright (c) 2006-2014, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
 
 #include "common.h"
+#include "crypto.h"
 #include "asn1.h"
 #include "bignum.h"
 #include "rsa.h"
@@ -28,6 +35,7 @@ struct crypto_rsa_key {
 };
 
 
+#ifdef EAP_TLS_FUNCS
 static const u8 * crypto_rsa_parse_integer(const u8 *pos, const u8 *end,
 					   struct bignum *num)
 {
@@ -80,7 +88,7 @@ crypto_rsa_import_public_key(const u8 *buf, size_t len)
 	 * PKCS #1, 7.1:
 	 * RSAPublicKey ::= SEQUENCE {
 	 *     modulus INTEGER, -- n
-	 *     publicExponent INTEGER -- e
+	 *     publicExponent INTEGER -- e 
 	 * }
 	 */
 
@@ -113,29 +121,6 @@ crypto_rsa_import_public_key(const u8 *buf, size_t len)
 error:
 	crypto_rsa_free(key);
 	return NULL;
-}
-
-
-struct crypto_rsa_key *
-crypto_rsa_import_public_key_parts(const u8 *n, size_t n_len,
-				   const u8 *e, size_t e_len)
-{
-	struct crypto_rsa_key *key;
-
-	key = os_zalloc(sizeof(*key));
-	if (key == NULL)
-		return NULL;
-
-	key->n = bignum_init();
-	key->e = bignum_init();
-	if (key->n == NULL || key->e == NULL ||
-	    bignum_set_unsigned_bin(key->n, n, n_len) < 0 ||
-	    bignum_set_unsigned_bin(key->e, e, e_len) < 0) {
-		crypto_rsa_free(key);
-		return NULL;
-	}
-
-	return key;
 }
 
 
@@ -239,6 +224,7 @@ error:
 	crypto_rsa_free(key);
 	return NULL;
 }
+#endif /* EAP_TLS_FUNCS */
 
 
 /**

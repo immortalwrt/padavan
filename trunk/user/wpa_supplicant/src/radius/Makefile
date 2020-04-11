@@ -1,23 +1,9 @@
-all: libradius.a
+all:
+	@echo Nothing to be made.
 
 clean:
-	rm -f *~ *.o *.d *.gcno *.gcda *.gcov libradius.a
+	for d in $(SUBDIRS); do make -C $$d clean; done
+	rm -f *~ *.o *.d
 
 install:
 	@echo Nothing to be made.
-
-
-include ../lib.rules
-
-CFLAGS += -DCONFIG_IPV6
-
-LIB_OBJS= \
-	radius.o \
-	radius_client.o \
-	radius_das.o \
-	radius_server.o
-
-libradius.a: $(LIB_OBJS)
-	$(AR) crT $@ $?
-
--include $(OBJS:%.o=%.d)

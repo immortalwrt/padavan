@@ -2,8 +2,14 @@
  * WPA Supplicant / WinMain() function for Windows-based applications
  * Copyright (c) 2006, Jouni Malinen <j@w1.fi>
  *
- * This software may be distributed under the terms of the BSD license.
- * See README for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * Alternatively, this software may be distributed under the terms of BSD
+ * license.
+ *
+ * See README and COPYING for more details.
  */
 
 #include "includes.h"
@@ -61,7 +67,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			exitcode = -1;
 			break;
 		}
-		if (wpa_supplicant_add_iface(global, &ifaces[i], NULL) == NULL)
+		if (wpa_supplicant_add_iface(global, &ifaces[i]) == NULL)
 			exitcode = -1;
 	}
 
