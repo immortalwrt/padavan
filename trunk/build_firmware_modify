@@ -220,6 +220,9 @@ if [ -n "$CONFIG_MT7615_AP" ] ; then
 	if [ "$CONFIG_FIRMWARE_WIFI_DRIVER" = "5.0.3.0" ] || [ "$CONFIG_FIRMWARE_WIFI2_DRIVER" = "5.0.3.0" ] || [ "$CONFIG_FIRMWARE_WIFI5_DRIVER" = "5.0.3.0" ]; then
 		dir_wifi_ver="5.0.3.0"
 	fi
+	if [ "$CONFIG_FIRMWARE_WIFI_DRIVER" = "5.0.4.0" ] || [ "$CONFIG_FIRMWARE_WIFI2_DRIVER" = "5.0.4.0" ] || [ "$CONFIG_FIRMWARE_WIFI5_DRIVER" = "5.0.4.0" ]; then
+		dir_wifi_ver="5.0.4.0"
+	fi
 	cp -rfL "$dir_wifi_src/rtpci/$dir_wifi_ver/mt7615" "$dir_wifi_dst/"
 	cp -rfL "$dir_wifi_src/rtpci/$dir_wifi_ver/mt7615_ap" "$dir_wifi_dst/"
 fi
