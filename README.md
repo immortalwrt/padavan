@@ -33,7 +33,6 @@ Contributors of this project are not responsible for what happens next.
 - 使用[gorden5566](https://github.com/gorden5566/padavan)的汉化字典
 - aria2前端更换为[AriaNg](https://github.com/mayswind/AriaNg)
 - [curl](https://github.com/curl/curl)可选编译可执行程序 ```CONFIG_FIRMWARE_INCLUDE_CURL```
-- 可选关闭webui里不常用的vpn页面 ```CONFIG_FIRMWARE_WEBUI_HIDE_VPN```
 - 使用了[PROMETHEUS](http://pm.freize.net/index.html)提供的部分补丁
 - 使用了[Linaro1985/padavan-ng](https://gitlab.com/padavan-ng/padavan-ng)的部分软件包
 - 可选以下插件：
@@ -96,6 +95,7 @@ Contributors of this project are not responsible for what happens next.
 >- DIR-878
 >- MR2600 (USB)
 >- WDR7300
+>- RM2100
 
 ***
 
@@ -103,10 +103,37 @@ Contributors of this project are not responsible for what happens next.
 
 * 安装依赖包
 ```shell
+# Debian/Ubuntu
 sudo apt update
-sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
+sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd fakeroot \
 cpio git python-docutils gettext automake autopoint texinfo build-essential help2man \
-pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev
+pkg-config zlib1g-dev libgmp3-dev libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget
+
+# CentOS 7
+sudo yum update
+sudo yum install ncurses-* flex byacc bison zlib-* texinfo gmp-* mpfr-* gettext \
+libtool* libmpc-* gettext-* python-docutils nano help2man fakeroot
+sudo yum groupinstall "Development Tools"
+
+# CentOS 8
+sudo yum update
+sudo yum install ncurses-* flex byacc bison zlib-* gmp-* mpfr-* gettext \
+libtool* libmpc-* gettext-* nano fakeroot
+sudo yum groupinstall "Development Tools"
+# CentOS 8不能直接通过yum安装texinfo，help2man，python-docutils。请去官网下载发行的安装包编译安装
+# 以texinfo为例
+# cd /usr/local/src
+# sudo wget http://ftp.gnu.org/gnu/texinfo/texinfo-6.7.tar.gz
+# sudo tar zxvf texinfo-6.7.tar.gz
+# cd texinfo-6.7
+# sudo ./configure
+# sudo make
+# sudo make install
+
+# Archlinux/Manjaro
+sudo pacman -Syu --needed git base-devel cmake gperf ncurses libmpc gmp python-docutils \
+vim rpcsvc-proto fakeroot
+
 ```
 * 克隆源码
 ```shell
@@ -136,8 +163,8 @@ nano /opt/rt-n56u/trunk/configs/templates/PSG1218.config
 * 清理代码树并开始编译
 ```shell
 cd /opt/rt-n56u/trunk
-sudo ./clear_tree
-sudo ./build_firmware_modify PSG1218
+./clear_tree
+fakeroot ./build_firmware_modify PSG1218
 # 脚本第一个参数为路由型号，在trunk/configs/templates/中
 # 编译好的固件在trunk/images里
 ```
