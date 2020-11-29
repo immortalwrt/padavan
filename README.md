@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/hanwckf/rt-n56u.svg?branch=master)](https://travis-ci.com/hanwckf/rt-n56u)
+![CI](https://github.com/hanwckf/rt-n56u/workflows/CI/badge.svg)
 ![GitHub All Releases](https://img.shields.io/github/downloads/hanwckf/rt-n56u/total)
 [![release](https://img.shields.io/github/release/hanwckf/rt-n56u.svg)](https://github.com/hanwckf/rt-n56u/releases)
 
@@ -96,7 +96,8 @@ Contributors of this project are not responsible for what happens next.
 >- MR2600 (USB)
 >- WDR7300
 >- RM2100
->- R2100 
+>- R2100
+>- JCG-Y2(USB)
 >- E8820V2(USB)
 >- MSG1500(USB)
 
