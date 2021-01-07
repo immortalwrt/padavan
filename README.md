@@ -60,10 +60,12 @@ Contributors of this project are not responsible for what happens next.
 >- [mtr](https://github.com/traviscross/mtr) ```CONFIG_FIRMWARE_INCLUDE_MTR```
 >- [socat](http://www.dest-unreach.org/socat) ```CONFIG_FIRMWARE_INCLUDE_SOCAT```
 >- [srelay](https://socks-relay.sourceforge.io) ```CONFIG_FIRMWARE_INCLUDE_SRELAY```
+>- [3proxy](https://github.com/z3APA3A/3proxy) ```CONFIG_FIRMWARE_INCLUDE_3PROXY```
 >- [mentohust](https://github.com/hanwckf/mentohust-1) ```CONFIG_FIRMWARE_INCLUDE_MENTOHUST```
 >- [frpc](https://github.com/fatedier/frp) ```CONFIG_FIRMWARE_INCLUDE_FRPC```
 >- [frps](https://github.com/fatedier/frp) ```CONFIG_FIRMWARE_INCLUDE_FRPS```
 >- [tunsafe](https://github.com/TunSafe/TunSafe) ```CONFIG_FIRMWARE_INCLUDE_TUNSAFE```
+>- [wireguard-go](https://git.zx2c4.com/wireguard-go/) ```CONFIG_FIRMWARE_INCLUDE_WIREGUARD```
 
 - 已适配除官方适配外的以下机型
 >- PSG1208
@@ -73,6 +75,7 @@ Contributors of this project are not responsible for what happens next.
 >- NEWIFI-MINI (USB)
 >- MI-MINI (USB)
 >- MI-3 (USB)
+>- MI-3C
 >- MI-R3G (USB)
 >- HC5661A
 >- HC5761A (USB)
@@ -111,7 +114,7 @@ Contributors of this project are not responsible for what happens next.
 # Debian/Ubuntu
 sudo apt update
 sudo apt install unzip libtool-bin curl cmake gperf gawk flex bison nano xxd \
-	fakeroot kmod cpio git python-docutils gettext automake autopoint \
+	fakeroot kmod cpio git python3-docutils gettext automake autopoint \
 	texinfo build-essential help2man pkg-config zlib1g-dev libgmp3-dev \
 	libmpc-dev libmpfr-dev libncurses5-dev libltdl-dev wget libc-dev-bin
 
@@ -177,14 +180,16 @@ sh dl_toolchain.sh
 nano /opt/rt-n56u/trunk/configs/templates/PSG1218.config
 ```
 
-* 清理代码树并开始编译
+* 开始编译
 
 ```shell
 cd /opt/rt-n56u/trunk
-./clear_tree
+# 对于WSL环境，建议使用sudo进行编译，或者使用fakeroot-tcp代替fakeroot
 fakeroot ./build_firmware_modify PSG1218
 # 脚本第一个参数为路由型号，在trunk/configs/templates/中
 # 编译好的固件在trunk/images里
+# 首次编译完成后，如果需要再次编译其它固件，需要执行清理脚本：
+./clean_tree
 ```
 
 ***
