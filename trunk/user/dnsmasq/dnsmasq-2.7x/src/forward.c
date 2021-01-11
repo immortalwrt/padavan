@@ -16,10 +16,12 @@
 
 #include "dnsmasq.h"
 
-static struct frec *lookup_frec(unsigned short id, void *hash);
+static struct frec *lookup_frec(unsigned short id, int fd, int family, void *hash);
 static struct frec *lookup_frec_by_sender(unsigned short id,
 					  union mysockaddr *addr,
 					  void *hash);
+static struct frec *lookup_frec_by_query(void *hash, unsigned int flags);
+
 static unsigned short get_id(void);
 static void free_frec(struct frec *f);
 
@@ -238,20 +240,27 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
   int type = SERV_DO_DNSSEC, norebind = 0;
   struct all_addr *addrp = NULL;
   unsigned int flags = 0;
+  unsigned int fwd_flags = 0;
   struct server *start = NULL;
-#ifdef HAVE_DNSSEC
   void *hash = hash_questions(header, plen, daemon->namebuff);
+#ifdef HAVE_DNSSEC
   int do_dnssec = 0;
-#else
-  unsigned int crc = questions_crc(header, plen, daemon->namebuff);
-  void *hash = &crc;
 #endif
  unsigned int gotname = extract_request(header, plen, daemon->namebuff, NULL);
 
  (void)do_bit;
 
+  if (header->hb4 & HB4_CD)
+    fwd_flags |= FREC_CHECKING_DISABLED;
+  if (ad_reqd)
+    fwd_flags |= FREC_AD_QUESTION;
+#ifdef HAVE_DNSSEC
+  if (do_bit)
+    fwd_flags |= FREC_DO_QUESTION;
+#endif
+
   /* may be no servers available. */
-  if (forward || (hash && (forward = lookup_frec_by_sender(ntohs(header->id), udpaddr, hash))))
+  if (forward || (forward = lookup_frec_by_sender(ntohs(header->id), udpaddr, hash)))
     {
       /* If we didn't get an answer advertising a maximal packet in EDNS,
 	 fall back to 1280, which should work everywhere on IPv6.
@@ -326,6 +335,39 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
     }
   else 
     {
+      /* Query from new source, but the same query may be in progress
+	 from another source. If so, just add this client to the
+	 list that will get the reply.
+	 
+	 Note that is the EDNS client subnet option is in use, we can't do this,
+	 as the clients (and therefore query EDNS options) will be different
+	 for each query. The EDNS subnet code has checks to avoid
+	 attacks in this case. */
+      if (!option_bool(OPT_CLIENT_SUBNET) && (forward = lookup_frec_by_query(hash, fwd_flags)))
+	{
+	  /* Note whine_malloc() zeros memory. */
+	  if (!daemon->free_frec_src &&
+	      daemon->frec_src_count < daemon->ftabsize &&
+	      (daemon->free_frec_src = whine_malloc(sizeof(struct frec_src))))
+	    daemon->frec_src_count++;
+	  
+	  /* If we've been spammed with many duplicates, just drop the query. */
+	  if (daemon->free_frec_src)
+	    {
+	      struct frec_src *new = daemon->free_frec_src;
+	      daemon->free_frec_src = new->next;
+	      new->next = forward->frec_src.next;
+	      forward->frec_src.next = new;
+	      new->orig_id = ntohs(header->id);
+	      new->source = *udpaddr;
+	      new->dest = *dst_addr;
+	      new->log_id = daemon->log_id;
+	      new->iface = dst_iface;
+	    }
+	  
+	  return 1;
+	}
+	
       if (gotname)
 	flags = search_servers(now, &addrp, gotname, daemon->namebuff, &type, &domain, &norebind);
       
@@ -340,15 +382,15 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
       
       if (forward)
 	{
-	  forward->source = *udpaddr;
-	  forward->dest = *dst_addr;
-	  forward->iface = dst_iface;
-	  forward->orig_id = ntohs(header->id);
+	  forward->frec_src.source = *udpaddr;
+	  forward->frec_src.dest = *dst_addr;
+	  forward->frec_src.iface = dst_iface;
+	  forward->frec_src.orig_id = ntohs(header->id);
 	  forward->new_id = get_id();
 	  forward->fd = udpfd;
 	  memcpy(forward->hash, hash, HASH_SIZE);
 	  forward->forwardall = 0;
-	  forward->flags = 0;
+	  forward->flags = fwd_flags;
 	  if (norebind)
 	    forward->flags |= FREC_NOREBIND;
 	  if (header->hb4 & HB4_CD)
@@ -402,9 +444,9 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
       size_t edns0_len;
 
       /* If a query is retried, use the log_id for the retry when logging the answer. */
-      forward->log_id = daemon->log_id;
+      forward->frec_src.log_id = daemon->log_id;
       
-      edns0_len  = add_edns0_config(header, plen, ((unsigned char *)header) + PACKETSZ, &forward->source, now, &subnet);
+      edns0_len  = add_edns0_config(header, plen, ((unsigned char *)header) + PACKETSZ, &forward->frec_src.source, now, &subnet);
       
       if (edns0_len != plen)
 	{
@@ -450,7 +492,9 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
 	      int fd;
 
 	      /* find server socket to use, may need to get random one. */
-	      if (start->sfd)
+	  fd = -1;
+
+	  if (start->sfd)
 		fd = start->sfd->fd;
 	      else 
 		{
@@ -478,7 +522,7 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
 		  if (option_bool(OPT_CONNTRACK))
 		    {
 		      unsigned int mark;
-		      if (get_incoming_mark(&forward->source, &forward->dest, 0, &mark))
+		      if (get_incoming_mark(&forward->frec_src.source, &forward->frec_src.dest, 0, &mark))
 			setsockopt(fd, SOL_SOCKET, SO_MARK, &mark, sizeof(unsigned int));
 		    }
 #endif
@@ -543,7 +587,7 @@ static int forward_query(int udpfd, union mysockaddr *udpaddr,
 	return 1;
       
       /* could not send on, prepare to return */ 
-      header->id = htons(forward->orig_id);
+      header->id = htons(forward->frec_src.orig_id);
       free_frec(forward); /* cancel */
     }	  
   
@@ -742,9 +786,6 @@ void reply_query(int fd, int family, time_t now)
   size_t nn;
   struct server *server;
   void *hash;
-#ifndef HAVE_DNSSEC
-  unsigned int crc;
-#endif
 
   /* packet buffer overwritten */
   daemon->srv_save = NULL;
@@ -771,20 +812,13 @@ void reply_query(int fd, int family, time_t now)
     if (serveraddr.sa.sa_family == AF_INET ? (serveraddr.in.sin_addr.s_addr != INADDR_ANY && htonl(serveraddr.in.sin_addr.s_addr) != INADDR_LOOPBACK) : (memcmp(&serveraddr.in6.sin6_addr, &in6addr_any, sizeof(in6addr_any)) && memcmp(&serveraddr.in6.sin6_addr, &in6addr_loopback, sizeof(in6addr_loopback))))
     return;
   
-#ifdef HAVE_DNSSEC
-  hash = hash_questions(header, n, daemon->namebuff);
-#else
-  hash = &crc;
-  crc = questions_crc(header, n, daemon->namebuff);
-#endif
-  
-  if (!(forward = lookup_frec(ntohs(header->id), hash)))
+  if (!(forward = lookup_frec(ntohs(header->id), fd, family, hash)))
     return;
   
   /* log_query gets called indirectly all over the place, so 
      pass these in global variables - sorry. */
-  daemon->log_display_id = forward->log_id;
-  daemon->log_source_addr = &forward->source;
+  daemon->log_display_id = forward->frec_src.log_id;
+  daemon->log_source_addr = &forward->frec_src.source;
   
   if (daemon->ignore_addr && RCODE(header) == NOERROR &&
       check_for_ignored_address(header, n, daemon->ignore_addr))
@@ -970,6 +1004,7 @@ void reply_query(int fd, int family, time_t now)
 #ifdef HAVE_IPV6
 		      new->rfd6 = NULL;
 #endif
+		      new->frec_src.next = NULL;
 		      new->flags &= ~(FREC_DNSKEY_QUERY | FREC_DS_QUERY);
 		      
 		      new->dependent = forward; /* to find query awaiting new one. */
@@ -987,8 +1022,7 @@ void reply_query(int fd, int family, time_t now)
 			  nn = dnssec_generate_query(header,((unsigned char *) header) + server->edns_pktsz,
 						     daemon->keyname, forward->class, T_DS, &server->addr, server->edns_pktsz);
 			}
-		      if ((hash = hash_questions(header, nn, daemon->namebuff)))
-			memcpy(new->hash, hash, HASH_SIZE);
+		      memcpy(new->hash, hash_questions(header, nn, daemon->namebuff), HASH_SIZE);
 		      new->new_id = get_id();
 		      header->id = htons(new->new_id);
 		      /* Save query for retransmission */
@@ -1024,7 +1058,7 @@ void reply_query(int fd, int family, time_t now)
 			  if (option_bool(OPT_CONNTRACK))
 			    {
 			      unsigned int mark;
-			      if (get_incoming_mark(&orig->source, &orig->dest, 0, &mark))
+			      if (get_incoming_mark(&orig->frec_src.source, &orig->frec_src.dest, 0, &mark))
 				setsockopt(fd, SOL_SOCKET, SO_MARK, &mark, sizeof(unsigned int));
 			    }
 #endif
@@ -1092,9 +1126,11 @@ void reply_query(int fd, int family, time_t now)
       
       if ((nn = process_reply(header, now, forward->sentto, (size_t)n, check_rebind, no_cache_dnssec, cache_secure, bogusanswer, 
 			      forward->flags & FREC_AD_QUESTION, forward->flags & FREC_DO_QUESTION, 
-			      forward->flags & FREC_ADDED_PHEADER, forward->flags & FREC_HAS_SUBNET, &forward->source)))
+			      forward->flags & FREC_ADDED_PHEADER, forward->flags & FREC_HAS_SUBNET, &forward->frec_src.source)))
 	{
-	  header->id = htons(forward->orig_id);
+	  struct frec_src *src;
+
+	  header->id = htons(forward->frec_src.orig_id);
 	  header->hb4 |= HB4_RA; /* recursion if available */
 #ifdef HAVE_DNSSEC
 	  /* We added an EDNSO header for the purpose of getting DNSSEC RRs, and set the value of the UDP payload size
@@ -1109,9 +1145,23 @@ void reply_query(int fd, int family, time_t now)
 	      nn = resize_packet(header, nn, NULL, 0);
 	    }
 #endif
-	  send_from(forward->fd, option_bool(OPT_NOWILD) || option_bool (OPT_CLEVERBIND), daemon->packet, nn, 
-		    &forward->source, &forward->dest, forward->iface);
+
+	  for (src = &forward->frec_src; src; src = src->next)
+	    {
+	      header->id = htons(src->orig_id);	  
+
+	      send_from(forward->fd, option_bool(OPT_NOWILD) || option_bool (OPT_CLEVERBIND), daemon->packet, nn, 
+			&src->source, &src->dest, src->iface);
+
+	      if (option_bool(OPT_EXTRALOG) && src != &forward->frec_src)
+		{
+		  daemon->log_display_id = src->log_id;
+		  daemon->log_source_addr = &src->source;
+		  log_query(F_UPSTREAM, "query", NULL, "duplicate");
+		}
+	    }
 	}
+
       free_frec(forward); /* cancel */
     }
 }
@@ -1807,15 +1857,9 @@ unsigned char *tcp_request(int confd, time_t now,
 	      if (!flags && last_server)
 		{
 		  struct server *firstsendto = NULL;
-#ifdef HAVE_DNSSEC
-		  unsigned char *newhash, hash[HASH_SIZE];
-		  if ((newhash = hash_questions(header, (unsigned int)size, daemon->namebuff)))
-		    memcpy(hash, newhash, HASH_SIZE);
-		  else
-		    memset(hash, 0, HASH_SIZE);
-#else
-		  unsigned int crc = questions_crc(header, (unsigned int)size, daemon->namebuff);
-#endif		  
+		  unsigned char hash[HASH_SIZE];
+		  memcpy(hash, hash_questions(header, (unsigned int)size, daemon->namebuff), HASH_SIZE);
+
 		  /* Loop round available servers until we succeed in connecting to one.
 		     Note that this code subtly ensures that consecutive queries on this connection
 		     which can go to the same server, do so. */
@@ -1958,20 +2002,11 @@ unsigned char *tcp_request(int confd, time_t now,
 		      /* If the crc of the question section doesn't match the crc we sent, then
 			 someone might be attempting to insert bogus values into the cache by 
 			 sending replies containing questions and bogus answers. */
-#ifdef HAVE_DNSSEC
-		      newhash = hash_questions(header, (unsigned int)m, daemon->namebuff);
-		      if (!newhash || memcmp(hash, newhash, HASH_SIZE) != 0)
+		      if (memcmp(hash, hash_questions(header, (unsigned int)m, daemon->namebuff), HASH_SIZE) != 0)
 			{ 
 			  m = 0;
 			  break;
 			}
-#else			  
-		      if (crc != questions_crc(header, (unsigned int)m, daemon->namebuff))
-			{
-			  m = 0;
-			  break;
-			}
-#endif
 
 		      m = process_reply(header, now, last_server, (unsigned int)m, 
 					option_bool(OPT_NO_REBIND) && !norebind, no_cache_dnssec, cache_secure, bogusanswer,
@@ -2065,6 +2100,17 @@ void free_rfd(struct randfd *rfd)
 
 static void free_frec(struct frec *f)
 {
+  struct frec_src *src, *tmp;
+
+   /* add back to freelist of not the record builtin to every frec. */
+  for (src = f->frec_src.next; src; src = tmp)
+    {
+      tmp = src->next;
+      src->next = daemon->free_frec_src;
+      daemon->free_frec_src = src;
+    }
+  
+  f->frec_src.next = NULL;    
   free_rfd(f->rfd4);
   f->rfd4 = NULL;
   f->sentto = NULL;
@@ -2179,15 +2225,25 @@ struct frec *get_new_frec(time_t now, int *wait, int force)
   return f; /* OK if malloc fails and this is NULL */
 }
 
-/* crc is all-ones if not known. */
-static struct frec *lookup_frec(unsigned short id, void *hash)
+static struct frec *lookup_frec(unsigned short id, int fd, int family, void *hash)
 {
   struct frec *f;
 
   for(f = daemon->frec_list; f; f = f->next)
     if (f->sentto && f->new_id == id && 
-	(!hash || memcmp(hash, f->hash, HASH_SIZE) == 0))
-      return f;
+	(memcmp(hash, f->hash, HASH_SIZE) == 0))
+      {
+	/* sent from random port */
+	if (family == AF_INET && f->rfd4 && f->rfd4->fd == fd)
+	  return f;
+
+	if (family == AF_INET6 && f->rfd6 && f->rfd6->fd == fd)
+	  return f;
+
+	/* sent to upstream from bound socket. */
+	if (f->sentto->sfd && f->sentto->sfd->fd == fd)
+	  return f;
+      }
       
   return NULL;
 }
@@ -2197,17 +2253,39 @@ static struct frec *lookup_frec_by_sender(unsigned short id,
 					  void *hash)
 {
   struct frec *f;
+  struct frec_src *src;
+
+  for (f = daemon->frec_list; f; f = f->next)
+    if (f->sentto &&
+	!(f->flags & (FREC_DNSKEY_QUERY | FREC_DS_QUERY)) &&
+	memcmp(hash, f->hash, HASH_SIZE) == 0)
+      for (src = &f->frec_src; src; src = src->next)
+	if (src->orig_id == id && 
+	    sockaddr_isequal(&src->source, addr))
+	  return f;
+  
+  return NULL;
+}
+
+static struct frec *lookup_frec_by_query(void *hash, unsigned int flags)
+{
+  struct frec *f;
+
+  /* FREC_DNSKEY and FREC_DS_QUERY are never set in flags, so the test below 
+     ensures that no frec created for internal DNSSEC query can be returned here. */
+
+#define FLAGMASK (FREC_CHECKING_DISABLED | FREC_AD_QUESTION | FREC_DO_QUESTION \
+		  | FREC_HAS_PHEADER | FREC_DNSKEY_QUERY | FREC_DS_QUERY)
   
   for(f = daemon->frec_list; f; f = f->next)
     if (f->sentto &&
-	f->orig_id == id && 
-	memcmp(hash, f->hash, HASH_SIZE) == 0 &&
-	sockaddr_isequal(&f->source, addr))
+	(f->flags & FLAGMASK) == flags &&
+	memcmp(hash, f->hash, HASH_SIZE) == 0)
       return f;
-   
+  
   return NULL;
 }
- 
+
 /* Send query packet again, if we can. */
 void resend_query()
 {
@@ -2248,12 +2326,20 @@ void server_gone(struct server *server)
 static unsigned short get_id(void)
 {
   unsigned short ret = 0;
+  struct frec *f;
   
-  do 
-    ret = rand16();
-  while (lookup_frec(ret, NULL));
-  
-  return ret;
+  while (1)
+    {
+      ret = rand16();
+
+      /* ensure id is unique. */
+      for (f = daemon->frec_list; f; f = f->next)
+	if (f->sentto && f->new_id == ret)
+	  break;
+
+      if (!f)
+	return ret;
+    }
 }
 
 

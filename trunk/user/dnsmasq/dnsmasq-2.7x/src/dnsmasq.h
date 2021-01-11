@@ -128,6 +128,7 @@ typedef unsigned long long u64;
 #endif
 
 #if defined(HAVE_LINUX_NETWORK)
+#include <linux/sockios.h>
 #include <linux/capability.h>
 /* There doesn't seem to be a universally-available 
    userspace header for these. */
@@ -609,16 +610,18 @@ struct hostsfile {
 #define FREC_ADDED_PHEADER    128
 #define FREC_TEST_PKTSZ       256
 #define FREC_HAS_EXTRADATA    512        
+#define FREC_HAS_PHEADER     1024
 
-#ifdef HAVE_DNSSEC
-#define HASH_SIZE 20 /* SHA-1 digest size */
-#else
-#define HASH_SIZE sizeof(int)
-#endif
+#define HASH_SIZE 32 /* SHA-256 digest size */
 
 struct frec {
-  union mysockaddr source;
-  struct all_addr dest;
+  struct frec_src {
+    union mysockaddr source;
+    struct all_addr dest;
+    unsigned int iface, log_id;
+    unsigned short orig_id;
+    struct frec_src *next;
+  } frec_src;
   struct server *sentto; /* NULL means free */
   struct randfd *rfd4;
 #ifdef HAVE_IPV6
@@ -1030,6 +1033,8 @@ extern struct daemon {
 #endif
   unsigned int local_answer, queries_forwarded, auth_answer;
   struct frec *frec_list;
+  struct frec_src *free_frec_src;
+  int frec_src_count;
   struct serverfd *sfds;
   struct irec *interfaces;
   struct listener *listeners;
@@ -1149,7 +1154,6 @@ int check_for_bogus_wildcard(struct dns_header *header, size_t qlen, char *name,
 			     struct bogus_addr *baddr, time_t now);
 int check_for_ignored_address(struct dns_header *header, size_t qlen, struct bogus_addr *baddr);
 int check_for_local_domain(char *name, time_t now);
-unsigned int questions_crc(struct dns_header *header, size_t plen, char *name);
 size_t resize_packet(struct dns_header *header, size_t plen, 
 		  unsigned char *pheader, size_t hlen);
 int add_resource_record(struct dns_header *header, char *limit, int *truncp,
@@ -1177,8 +1181,10 @@ int dnssec_validate_reply(time_t now, struct dns_header *header, size_t plen, ch
 			  int check_unsigned, int *neganswer, int *nons);
 int dnskey_keytag(int alg, int flags, unsigned char *key, int keylen);
 size_t filter_rrsigs(struct dns_header *header, size_t plen);
-unsigned char* hash_questions(struct dns_header *header, size_t plen, char *name);
 int setup_timestamp(void);
+
+/* hash_questions.c */
+unsigned char *hash_questions(struct dns_header *header, size_t plen, char *name);
 
 /* util.c */
 void rand_init(void);
