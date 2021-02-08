@@ -260,7 +260,8 @@ struct event_desc {
 #define OPT_RAPID_COMMIT   57
 #define OPT_UBUS           58
 #define OPT_FILTER_AAAA    59
-#define OPT_LAST           60
+#define OPT_DHCP_TO_HOST   60
+#define OPT_LAST           61
 
 #define OPTION_BITS (sizeof(unsigned int)*8)
 #define OPTION_SIZE ( (OPT_LAST/OPTION_BITS)+((OPT_LAST%OPTION_BITS)!=0) )
@@ -520,6 +521,7 @@ union mysockaddr {
 #define SERV_LOOP           8192  /* server causes forwarding loop */
 #define SERV_DO_DNSSEC     16384  /* Validate DNSSEC when using this server */
 #define SERV_GOT_TCP       32768  /* Got some data from the TCP connection */
+#define SERV_IS_TCP        65536  /* Is TCP server */
 
 struct serverfd {
   int fd;
