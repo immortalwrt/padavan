@@ -1,5 +1,5 @@
-SRC_NAME=openssl-1.1.1j
-SRC_URL=https://mirrors.cloud.tencent.com/openssl/source/$(SRC_NAME).tar.gz
+SRC_NAME=openssl-1.1.1k
+SRC_URL=https://mirrors.tencent.com/openssl/source/$(SRC_NAME).tar.gz
 
 # openssl use CROSS_COMPILE prefix
 CC = gcc
