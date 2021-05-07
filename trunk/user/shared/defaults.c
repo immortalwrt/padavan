@@ -157,7 +157,9 @@ struct nvram_pair router_defaults[] = {
 	/* 5G Wireless parameters */
 	{ "wl_country_code", DEF_WLAN_5G_CC },		/* Country Code (default obtained from driver) */
 	{ "wl_ssid", DEF_WLAN_5G_SSID },		/* Service set ID (network name) */
-#if BOARD_HAS_5G_11AC
+#if defined(BOARD_HAS_5G_11AX) && BOARD_HAS_5G_11AX
+	{ "wl_gmode", "5" },			/* A/N/AC/AX Mixed */
+#elif BOARD_HAS_5G_11AC
 	{ "wl_gmode", "4" },			/* A/N/AC Mixed */
 #else
 	{ "wl_gmode", "2" },			/* A/N Mixed */
@@ -220,13 +222,15 @@ struct nvram_pair router_defaults[] = {
 	{ "wl_greenap", "0" },
 	{ "wl_ldpc", "2" },
 	{ "wl_HT_RDG", "0" },
-#if defined (USE_WID_5G) && USE_WID_5G==7615
+#if defined (USE_WID_5G) && (USE_WID_5G==7615 || USE_WID_5G==7915)
 	{ "wl_HT_AMSDU", "1" },
+	{ "wl_HT_BAWinSize", "256" },
+	{ "wl_mumimo", "0" },
 #else
 	{ "wl_HT_AMSDU", "0" },
+	{ "wl_HT_BAWinSize", "64" },
 #endif
 	{ "wl_HT_MpduDensity", "5" },
-	{ "wl_HT_BAWinSize", "64" },
 	{ "wl_HT_AutoBA", "1" },
 	{ "wl_VgaClamp", "0" },
 	{ "wl_KickStaRssiLow", "0" },
@@ -248,10 +252,6 @@ struct nvram_pair router_defaults[] = {
 	{ "wl_guest_macrule", "0" },
 	{ "wl_guest_mcs_mode", "0" },
 
-#if defined (USE_WID_5G) && USE_WID_5G==7615
-	{ "wl_mumimo", "0" },
-#endif
-
 	// ApCli 5Ghz
 	{ "wl_sta_ssid", "" },
 	{ "wl_sta_auth_mode", "open" },
@@ -266,7 +266,11 @@ struct nvram_pair router_defaults[] = {
 	/* 2G Wireless parameters */
 	{ "rt_country_code", DEF_WLAN_2G_CC },
 	{ "rt_ssid", DEF_WLAN_2G_SSID },
+#if defined(BOARD_HAS_2G_11AX) && BOARD_HAS_2G_11AX
+	{ "rt_gmode", "6" },			/* b/g/n/ax mixed */
+#else
 	{ "rt_gmode", "5" },			/* g/n mixed */
+#endif
 	{ "rt_mcs_mode", "0" },
 	{ "rt_channel", "0" },
 	{ "rt_bcn", "100" },
@@ -320,11 +324,17 @@ struct nvram_pair router_defaults[] = {
 	{ "rt_stream_rx", STR(BOARD_NUM_ANT_2G_RX) },
 	{ "rt_preamble", "1" },
 	{ "rt_greenap", "0" },
-	{ "rt_ldpc", "0" },
 	{ "rt_HT_RDG", "0" },
 	{ "rt_HT_AMSDU", "0" },
 	{ "rt_HT_MpduDensity", "5" },
+#if defined (USE_WID_2G) && (USE_WID_2G==7615 || USE_WID_2G==7915)
+	{ "rt_HT_BAWinSize", "256" },
+	{ "rt_ldpc", "1" },
+	{ "rt_turbo_qam", "1" },
+#else
 	{ "rt_HT_BAWinSize", "64" },
+	{ "rt_ldpc", "0" },
+#endif
 	{ "rt_HT_AutoBA", "1" },
 	{ "rt_VgaClamp", "0" },
 	{ "rt_KickStaRssiLow", "0" },
@@ -345,11 +355,6 @@ struct nvram_pair router_defaults[] = {
 	{ "rt_guest_wpa_psk", "" },
 	{ "rt_guest_macrule", "0" },
 	{ "rt_guest_mcs_mode", "0" },
-
-#if defined (USE_WID_2G) && USE_WID_2G==7615
-	{ "rt_turbo_qam", "1" },
-	{ "rt_airtimefairness", "0" },
-#endif
 
 	// ApCli 2.4Ghz
 	{ "rt_sta_ssid", "" },
@@ -609,6 +614,8 @@ struct nvram_pair router_defaults[] = {
 	{ "ddns_hostname2_x", "" },
 	{ "ddns_hostname3_x", "" },
 	{ "ddns_wildcard_x", "0" },
+	{ "ddns2_wildcard_x", "0" },
+	{ "ddns_ipv6", "0" },
 	{ "ddns_cst_svr", "" },
 	{ "ddns_cst_url", "" },
 	{ "ddns_period", "24" },
@@ -616,12 +623,13 @@ struct nvram_pair router_defaults[] = {
 	{ "ddns_verbose", "1" },
 	{ "ddns_source", "0" },
 	{ "ddns_checkip", "0" },
-	{ "ddns_ssl", "1" },
+	{ "ddns2_checkip", "0" },
+	{ "ddns_ssl", "0" },
 	{ "ddns2_server", "" },
 	{ "ddns2_hname", "" },
 	{ "ddns2_user", "" },
 	{ "ddns2_pass", "" },
-	{ "ddns2_ssl", "1" },
+	{ "ddns2_ssl", "0" },
 	{ "asusddns_tos_agreement", "0" },
 
 	{ "preferred_lang", "CN" },
@@ -765,7 +773,7 @@ struct nvram_pair router_defaults[] = {
 #endif
 
 #if defined(CONFIG_RALINK_MT7621) || (defined(CONFIG_RALINK_MT7620) && !defined(BOARD_N14U))
-#if defined(USE_MT7615_AP) // hwnat is disabled by default
+#if defined(USE_MT7615_AP) || (USE_MT7915_AP) // hwnat is disabled by default
 	{ "hw_nat_mode", "2" },
 #else
 	{ "hw_nat_mode", "4" },
@@ -831,9 +839,11 @@ struct nvram_pair router_defaults[] = {
 	{ "vpns_ov_prot", "0" },
 	{ "vpns_ov_port", "1194" },
 	{ "vpns_ov_mdig", "1" },
-	{ "vpns_ov_ciph", "3" },
-	{ "vpns_ov_clzo", "2" },
+	{ "vpns_ov_ciph", "15" },
+	{ "vpns_ov_ncp_clist", DEF_OVPNS_CIPH_LIST },
+	{ "vpns_ov_compress", "2" },
 	{ "vpns_ov_atls", "0" },
+	{ "vpns_ov_tcv2", "0" },
 	{ "vpns_ov_rdgw", "0" },
 	{ "vpnc_ov_mode", "1" },
 	{ "vpnc_ov_cnat", "0" },
@@ -841,8 +851,9 @@ struct nvram_pair router_defaults[] = {
 	{ "vpnc_ov_port", "1194" },
 	{ "vpnc_ov_auth", "0" },
 	{ "vpnc_ov_mdig", "1" },
-	{ "vpnc_ov_ciph", "3" },
-	{ "vpnc_ov_clzo", "2" },
+	{ "vpnc_ov_ciph", "15" },
+	{ "vpnc_ov_ncp_clist", DEF_OVPNC_CIPH_LIST },
+	{ "vpnc_ov_compress", "2" },
 	{ "vpnc_ov_atls", "0" },
 
 #if defined(APP_XTU)

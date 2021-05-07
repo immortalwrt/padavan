@@ -2310,11 +2310,12 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int has_http_ssl = 0;
 #endif
-#if defined (SUPPORT_DDNS_SSL)
-	int has_ddns_ssl = 1;
+#if defined (SUPPORT_OPENSSL_EC)
+	int has_openssl_ec = 1;
 #else
-	int has_ddns_ssl = 0;
+	int has_openssl_ec = 0;
 #endif
+	int has_ddns_ssl = 1;
 #if defined (USE_RT3352_MII)
 	int has_inic_mii = 1;
 #else
@@ -2338,16 +2339,15 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int has_btn_mode = 0;
 #endif
-#if defined (USE_WID_5G) && (USE_WID_5G==7610 || USE_WID_5G==7612 || USE_WID_5G==7615) && BOARD_HAS_5G_11AC
+#if defined (USE_WID_5G) && (USE_WID_5G==7610 || USE_WID_5G==7612 || USE_WID_5G==7615 || USE_WID_5G==7915)
 	int has_5g_vht = 1;
 #else
 	int has_5g_vht = 0;
 #endif
-#if defined (USE_WID_5G) && USE_WID_5G==7615 && BOARD_HAS_5G_11AC
+#if defined (USE_WID_5G) && (USE_WID_5G==7615 || USE_WID_5G==7915)
 	int has_5g_mumimo = 1;
 	int has_5g_txbf = 1;
-	int has_5g_band_steering = 1;
-#if defined (BOARD_MT7615_DBDC)
+#if defined (BOARD_MT7615_DBDC) || (BOARD_MT7915_DBDC)
 	int has_5g_160mhz = 0;
 #else
 	int has_5g_160mhz = 1;
@@ -2355,15 +2355,12 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int has_5g_mumimo = 0;
 	int has_5g_txbf = 0;
-	int has_5g_band_steering = 0;
 	int has_5g_160mhz = 0;
 #endif
-#if defined (USE_WID_2G) && USE_WID_2G==7615
+#if defined (USE_WID_2G) && (USE_WID_2G==7615 || USE_WID_2G==7915)
 	int has_2g_turbo_qam = 1;
-	int has_2g_airtimefairness = 1;
 #else
 	int has_2g_turbo_qam = 0;
-	int has_2g_airtimefairness = 0;
 #endif
 #if defined (USE_WID_2G)
 	int wid_2g = USE_WID_2G;
@@ -2380,10 +2377,20 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 #else
 	int has_sfe = 0;
 #endif
-#if defined (BOARD_MT7615_DBDC)
+#if defined (BOARD_MT7615_DBDC) || defined (BOARD_MT7915_DBDC)
 	int has_lan_ap_isolate = 0;
 #else
 	int has_lan_ap_isolate = 1;
+#endif
+#if defined (USE_WID_5G) && (USE_WID_5G==7915)
+	int has_5g_11ax = 1;
+#else
+	int has_5g_11ax = 0;
+#endif
+#if defined (USE_WID_2G) && (USE_WID_2G==7915)
+	int has_2g_11ax = 1;
+#else
+	int has_2g_11ax = 0;
 #endif
 
 	websWrite(wp,
@@ -2439,6 +2446,7 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		"function support_ipv4_ppe() { return %d;}\n"
 		"function support_peap_ssl() { return %d;}\n"
 		"function support_http_ssl() { return %d;}\n"
+		"function support_openssl_ec() { return %d;}\n"
 		"function support_ddns_ssl() { return %d;}\n"
 		"function support_min_vlan() { return %d;}\n"
 		"function support_max_conn() { return %d;}\n"
@@ -2463,18 +2471,19 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		"function support_2g_stream_tx() { return %d;}\n"
 		"function support_2g_stream_rx() { return %d;}\n"
 		"function support_2g_turbo_qam() { return %d;}\n"
-		"function support_2g_airtimefairness() { return %d;}\n"
 		"function support_5g_txbf() { return %d;}\n"
-		"function support_5g_band_steering() { return %d;}\n"
 		"function support_5g_mumimo() { return %d;}\n"
 		"function support_sfe() { return %d;}\n"
 		"function support_lan_ap_isolate() { return %d;}\n"
-		"function support_5g_160mhz() { return %d;}\n",
+		"function support_5g_160mhz() { return %d;}\n"
+		"function support_5g_11ax() { return %d;}\n"
+		"function support_2g_11ax() { return %d;}\n",
 		has_ipv6,
 		has_ipv6_ppe,
 		has_ipv4_ppe,
 		has_peap_ssl,
 		has_http_ssl,
+		has_openssl_ec,
 		has_ddns_ssl,
 		MIN_EXT_VLAN_VID,
 		max_conn,
@@ -2499,13 +2508,13 @@ ej_firmware_caps_hook(int eid, webs_t wp, int argc, char **argv)
 		BOARD_NUM_ANT_2G_TX,
 		BOARD_NUM_ANT_2G_RX,
 		has_2g_turbo_qam,
-		has_2g_airtimefairness,
 		has_5g_txbf,
-		has_5g_band_steering,
 		has_5g_mumimo,
 		has_sfe,
 		has_lan_ap_isolate,
-		has_5g_160mhz
+		has_5g_160mhz,
+		has_5g_11ax,
+		has_2g_11ax
 	);
 
 	return 0;
@@ -2603,22 +2612,26 @@ openvpn_srv_cert_hook(int eid, webs_t wp, int argc, char **argv)
 {
 	int has_found_cert = 0;
 #if defined(APP_OPENVPN)
-	int i, i_atls;
+	int i, i_atls, i_tcv2;
 	char key_file[64];
-	static const char *openvpn_server_keys[5] = {
+	static const char *openvpn_server_keys[6] = {
 		"ca.crt",
 		"dh1024.pem",
 		"server.crt",
 		"server.key",
-		"ta.key"
+		"ta.key",
+		"stc2.key"
 	};
 
 	has_found_cert = 1;
 
 	i_atls = nvram_get_int("vpns_ov_atls");
+	i_tcv2 = nvram_get_int("vpns_ov_tcv2");
 
-	for (i=0; i<5; i++) {
+	for (i=0; i<6; i++) {
 		if (!i_atls && (i == 4))
+			continue;
+		if (!i_tcv2 && (i == 5))
 			continue;
 		sprintf(key_file, "%s/%s", STORAGE_OVPNSVR_DIR, openvpn_server_keys[i]);
 		if (!f_exists(key_file)) {
@@ -3222,12 +3235,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(APP_OPENVPN)
 		char *common_name = websGetVar(wp, "common_name", "");
-		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
+		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = "client@ovpn";
 		if (get_login_safe())
-			sys_result = doSystem("/sbin/ovpn_export_client '%s' %d %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/sbin/ovpn_export_client '%s' %s %d", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3237,12 +3250,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(APP_OPENVPN)
 		char *common_name = websGetVar(wp, "common_name", "");
-		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
+		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = "OpenVPN Server";
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %d -d %d", "server", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/openvpn-cert.sh %s -n '%s' -b %s -d %d", "server", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
@@ -3252,12 +3265,12 @@ apply_cgi(const char *url, webs_t wp)
 		int sys_result = 1;
 #if defined(SUPPORT_HTTPS)
 		char *common_name = websGetVar(wp, "common_name", "");
-		int rsa_bits = atoi(websGetVar(wp, "rsa_bits", "1024"));
+		char *rsa_bits = websGetVar(wp, "rsa_bits", "1024");
 		int days_valid = atoi(websGetVar(wp, "days_valid", "365"));
 		if (strlen(common_name) < 1)
 			common_name = nvram_safe_get("lan_ipaddr_t");
 		if (get_login_safe())
-			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %d -d %d", common_name, rsa_bits, days_valid);
+			sys_result = doSystem("/usr/bin/https-cert.sh -n '%s' -b %s -d %d", common_name, rsa_bits, days_valid);
 #endif
 		websWrite(wp, "{\"sys_result\": %d}", sys_result);
 		return 0;
