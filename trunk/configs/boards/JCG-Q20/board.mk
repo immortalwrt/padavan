@@ -1,8 +1,8 @@
 ##################################################################
 # Board PID # Board Name       # PRODUCT # Note
 ##################################################################
-# NETGEAR-BZV # NETGEAR-BZV   # MT7621  #
+# Q20       # Q20              # MT7621  #
 ##################################################################
 
-CFLAGS += -DBOARD_NETGEAR_BZV
-BOARD_NUM_USB_PORTS=2
+CFLAGS += -DBOARD_Q20 -DBOARD_MT7915_DBDC
+BOARD_NUM_USB_PORTS=0
